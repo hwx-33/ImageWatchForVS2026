@@ -46,5 +46,21 @@ namespace ImageWatch.Models
             string d = GetDepthName(GetDepth(cvType));
             return $"CV_{d}C{ch}";
         }
+
+        // Display names used in the variable list (e.g. "UINT8", "FLOAT64")
+        public static string GetDisplayDepthName(int depth)
+        {
+            switch (depth)
+            {
+                case CV_8U:  return "UINT8";
+                case CV_8S:  return "INT8";
+                case CV_16U: return "UINT16";
+                case CV_16S: return "INT16";
+                case CV_32S: return "INT32";
+                case CV_32F: return "FLOAT32";
+                case CV_64F: return "FLOAT64";
+                default: return "UNKNOWN";
+            }
+        }
     }
 }

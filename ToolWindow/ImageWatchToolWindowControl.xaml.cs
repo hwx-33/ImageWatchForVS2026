@@ -9,6 +9,13 @@ namespace ImageWatch.ToolWindow
         {
             InitializeComponent();
             DataContext = ImageWatchViewModel.Instance;
+
+            // Wire up cursor and zoom callbacks from the canvas
+            ImageCanvas.CursorChanged = (x, y, vals) =>
+                ImageWatchViewModel.Instance.UpdateCursorInfo(x, y, vals);
+
+            ImageCanvas.ZoomChanged = zoom =>
+                ImageWatchViewModel.Instance.UpdateZoom(zoom);
         }
     }
 }

@@ -34,6 +34,21 @@ namespace ImageWatch.Imaging
             return bitmap;
         }
 
+        /// <summary>Scales a full BitmapSource down to a thumbnail (max maxW x maxH pixels).</summary>
+        public static BitmapSource CreateThumbnail(BitmapSource full, int maxW = 56, int maxH = 42)
+        {
+            if (full == null) return null;
+            double sx = (double)maxW / full.PixelWidth;
+            double sy = (double)maxH / full.PixelHeight;
+            double s  = Math.Min(Math.Min(sx, sy), 1.0);
+            if (s >= 0.99) { return full; }
+            var tb = new System.Windows.Media.Imaging.TransformedBitmap(
+                full,
+                new System.Windows.Media.ScaleTransform(s, s));
+            tb.Freeze();
+            return tb;
+        }
+
         private static byte Clamp(double v) => (byte)Math.Max(0, Math.Min(255, (int)v));
 
         private static void Convert8U(byte[] src, byte[] dst, MatInfo info)

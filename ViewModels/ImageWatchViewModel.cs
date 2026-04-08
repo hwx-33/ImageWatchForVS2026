@@ -16,17 +16,18 @@ namespace ImageWatch.ViewModels
     {
         public event PropertyChangedEventHandler PropertyChanged;
 
-        // Singleton for access from DebugSessionManager and ToolWindow
         private static ImageWatchViewModel _instance;
         public static ImageWatchViewModel Instance =>
             _instance ?? (_instance = new ImageWatchViewModel());
 
         private MatVariableItem _selectedVariable;
-        private BitmapSource _currentImage;
-        private byte[] _currentRawData;
-        private MatInfo _currentMatInfo;
-        private string _statusText = "等待调试会话...";
-        private bool _isLoading;
+        private BitmapSource    _currentImage;
+        private byte[]          _currentRawData;
+        private MatInfo         _currentMatInfo;
+        private string          _statusText      = "等待调试会话...";
+        private string          _cursorInfoText  = "";
+        private string          _zoomLevelText   = "";
+        private bool            _isLoading;
 
         public ObservableCollection<MatVariableItem> Variables { get; } =
             new ObservableCollection<MatVariableItem>();
@@ -39,8 +40,7 @@ namespace ImageWatch.ViewModels
                 if (_selectedVariable == value) return;
                 _selectedVariable = value;
                 OnPropertyChanged(nameof(SelectedVariable));
-                if (value != null)
-                    _ = LoadVariableAsync(value);
+                if (value != null) _ = LoadVariableAsync(value);
             }
         }
 
@@ -68,13 +68,41 @@ namespace ImageWatch.ViewModels
             private set { _statusText = value; OnPropertyChanged(nameof(StatusText)); }
         }
 
+        // "0056 0047  |  056 100 064"
+        public string CursorInfoText
+        {
+            get => _cursorInfoText;
+            private set { _cursorInfoText = value; OnPropertyChanged(nameof(CursorInfoText)); }
+        }
+
+        // "64.00x"
+        public string ZoomLevelText
+        {
+            get => _zoomLevelText;
+            private set { _zoomLevelText = value; OnPropertyChanged(nameof(ZoomLevelText)); }
+        }
+
         public bool IsLoading
         {
             get => _isLoading;
             private set { _isLoading = value; OnPropertyChanged(nameof(IsLoading)); }
         }
 
-        // Called from DebugSessionManager on UI thread when breakpoint is hit
+        // Called from ZoomableImageCanvas on mouse move
+        public void UpdateCursorInfo(int x, int y, string[] vals)
+        {
+            if (x < 0 || y < 0) { CursorInfoText = ""; return; }
+            string coords = $"{x:D4} {y:D4}";
+            if (vals != null && vals.Length > 0)
+                CursorInfoText = $"{coords}  |  {string.Join("  ", vals)}";
+            else
+                CursorInfoText = coords;
+        }
+
+        // Called from ZoomableImageCanvas on zoom change
+        public void UpdateZoom(double zoom) =>
+            ZoomLevelText = $"{zoom:F2}x";
+
         public void OnBreakpointHit(DTE dte, AsyncPackage package)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -82,14 +110,10 @@ namespace ImageWatch.ViewModels
             var evaluator = new MatExpressionEvaluator(dte);
             var names     = evaluator.FindMatVariableNames();
 
-            // Build a lookup of existing variables
             var existing = new Dictionary<string, MatVariableItem>();
             foreach (var v in Variables) existing[v.Name] = v;
-
-            // Mark all existing as stale; will un-stale those still in scope
             foreach (var v in Variables) v.IsStale = true;
 
-            // Process found variables
             foreach (var name in names)
             {
                 var info = evaluator.EvaluateMatInfo(name);
@@ -97,7 +121,7 @@ namespace ImageWatch.ViewModels
 
                 if (existing.TryGetValue(name, out var item))
                 {
-                    item.Info    = info;   // setter notifies DisplayLabel
+                    item.Info    = info;
                     item.IsStale = false;
                 }
                 else
@@ -109,7 +133,6 @@ namespace ImageWatch.ViewModels
 
             StatusText = $"找到 {names.Count} 个 Mat 变量";
 
-            // Auto-select first non-stale variable if nothing selected
             if ((_selectedVariable == null || _selectedVariable.IsStale) && Variables.Count > 0)
             {
                 foreach (var v in Variables)
@@ -117,17 +140,18 @@ namespace ImageWatch.ViewModels
             }
             else if (_selectedVariable != null && !_selectedVariable.IsStale)
             {
-                // Refresh the currently selected variable
                 _ = LoadVariableAsync(_selectedVariable);
             }
         }
 
         public void OnDebugSessionEnded()
         {
-            StatusText = "调试会话已结束";
-            CurrentImage    = null;
-            CurrentRawData  = null;
-            CurrentMatInfo  = null;
+            StatusText     = "调试会话已结束";
+            CurrentImage   = null;
+            CurrentRawData = null;
+            CurrentMatInfo = null;
+            CursorInfoText = "";
+            ZoomLevelText  = "";
             foreach (var v in Variables) v.IsStale = true;
         }
 
@@ -135,20 +159,18 @@ namespace ImageWatch.ViewModels
         {
             if (item?.Info == null) return;
 
-            IsLoading = true;
+            IsLoading  = true;
             StatusText = $"加载 {item.Name}...";
 
             try
             {
                 var info = item.Info;
 
-                // Get process ID on UI thread
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                 int pid = 0;
                 try
                 {
-                    // Access DTE on main thread
-                    var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(DTE)) as DTE;
+                    var dte = Package.GetGlobalService(typeof(DTE)) as DTE;
                     if (dte?.Debugger?.CurrentProcess != null)
                         pid = dte.Debugger.CurrentProcess.ProcessID;
                 }
@@ -161,43 +183,33 @@ namespace ImageWatch.ViewModels
                         CurrentImage   = item.CachedImage;
                         CurrentRawData = item.CachedRawData;
                         CurrentMatInfo = info;
-                        StatusText = $"{item.Name} – {info.Cols}×{info.Rows}  {MatTypeHelper.GetTypeName(info.CvType)} [缓存]";
+                        StatusText     = $"{item.Name} – {info.Cols}×{info.Rows}  {MatTypeHelper.GetTypeName(info.CvType)} [缓存]";
                     }
-                    else
-                    {
-                        StatusText = $"{item.Name} – 无法读取数据";
-                    }
+                    else StatusText = $"{item.Name} – 无法读取数据";
                     return;
                 }
 
-                // Read memory on background thread
                 byte[] rawData = await Task.Run(() =>
                     DebugMemoryReader.ReadMemory(pid, info.DataPointer, info.DataSize));
 
-                if (rawData == null)
-                {
-                    StatusText = $"{item.Name} – 内存读取失败";
-                    return;
-                }
+                if (rawData == null) { StatusText = $"{item.Name} – 内存读取失败"; return; }
 
-                // Convert to bitmap on background thread
-                BitmapSource bitmap = await Task.Run(() =>
-                    MatBitmapConverter.Convert(rawData, info));
+                BitmapSource bitmap = await Task.Run(() => MatBitmapConverter.Convert(rawData, info));
 
-                if (bitmap == null)
-                {
-                    StatusText = $"{item.Name} – 图像转换失败";
-                    return;
-                }
+                if (bitmap == null) { StatusText = $"{item.Name} – 图像转换失败"; return; }
 
-                // Update on UI thread
+                // Generate thumbnail on background thread (bitmap is already frozen)
+                BitmapSource thumb = await Task.Run(() =>
+                    MatBitmapConverter.CreateThumbnail(bitmap));
+
                 await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                item.CachedImage   = bitmap;
-                item.CachedRawData = rawData;
-                CurrentImage       = bitmap;
-                CurrentRawData     = rawData;
-                CurrentMatInfo     = info;
-                StatusText = $"{item.Name}  {info.Cols}×{info.Rows}  {MatTypeHelper.GetTypeName(info.CvType)}";
+                item.ThumbnailImage = thumb;
+                item.CachedImage    = bitmap;
+                item.CachedRawData  = rawData;
+                CurrentImage        = bitmap;
+                CurrentRawData      = rawData;
+                CurrentMatInfo      = info;
+                StatusText          = $"{item.Name}  {info.Cols}×{info.Rows}  {MatTypeHelper.GetTypeName(info.CvType)}";
             }
             catch (Exception ex)
             {
