@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable"
+              xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <Extern href="stdidcmd.h"/>
+  <Extern href="vsshlids.h"/>
+
+  <Commands package="guidImageWatchPackage">
+    <Groups>
+      <!-- Place command in View menu -->
+      <Group guid="guidImageWatchCommandSet" id="ImageWatchMenuGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_VIEW"/>
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="guidImageWatchCommandSet" id="ImageWatchWindowCommandId"
+              priority="0x0100" type="Button">
+        <Parent guid="guidImageWatchCommandSet" id="ImageWatchMenuGroup"/>
+        <Strings>
+          <ButtonText>Image Watch</ButtonText>
+          <CommandName>ImageWatch.ShowWindow</CommandName>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <Symbols>
+    <GuidSymbol name="guidImageWatchPackage"
+                value="{0c050587-b2c3-4e54-b195-fd43e98c7369}"/>
+
+    <GuidSymbol name="guidImageWatchCommandSet"
+                value="{9EEFDA4E-9D13-4F84-9F1E-4E4B4A1E8E0D}">
+      <IDSymbol name="ImageWatchMenuGroup"      value="0x1020"/>
+      <IDSymbol name="ImageWatchWindowCommandId" value="0x0100"/>
+    </GuidSymbol>
+  </Symbols>
+
+</CommandTable>
