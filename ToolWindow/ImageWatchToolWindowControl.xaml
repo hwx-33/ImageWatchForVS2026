@@ -115,8 +115,8 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Thumbnail -->
-                <Border Grid.Column="0" Width="56" Height="42"
-                        Background="#3F3F46" Margin="0,0,6,0">
+                <Grid Grid.Column="0" Width="56" Height="42" Margin="0,0,6,0"
+                      Background="#3F3F46">
                   <!-- Placeholder when no thumbnail -->
                   <TextBlock Text="[无效]" Foreground="#777"
                              HorizontalAlignment="Center"
@@ -134,7 +134,7 @@
                   </TextBlock>
                   <Image Source="{Binding ThumbnailImage}" Stretch="Uniform"
                          RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                </Border>
+                </Grid>
 
                 <!-- Info text -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
