@@ -163,8 +163,16 @@ namespace ImageWatch.Controls
             int c1 = Math.Min(info.Cols - 1, (int)Math.Ceiling(br.X));
             int r1 = Math.Min(info.Rows - 1, (int)Math.Ceiling(br.Y));
 
-            bool   showText  = scale >= 16.0;
-            double fontSize  = Math.Max(7.0, Math.Min(scale * 0.28, 13.0));
+            // For multi-channel images require more zoom so text has room to breathe
+            int    channels  = info?.Channels ?? 1;
+            double textThreshold = 16.0 + (channels - 1) * 8.0; // 1ch→16, 3ch→32
+            bool   showText  = scale >= textThreshold;
+
+            // Font sized so all lines fit within ~70% of cell height, capped at 9px
+            double maxFontByCell = scale * 0.68 / Math.Max(1, channels * 1.35);
+            double fontSize = Math.Max(6.0, Math.Min(maxFontByCell, 9.0));
+
+            const double padX = 2, padY = 1;
 
             for (int row = r0; row <= r1; row++)
             {
@@ -191,17 +199,14 @@ namespace ImageWatch.Controls
                         FlowDirection.LeftToRight,
                         _typeface, fontSize, textBrush, 1.0);
 
-                    // Center the badge within the cell
-                    const double padX = 3, padY = 2;
-                    double bgW   = ft.Width  + padX * 2;
-                    double bgH   = ft.Height + padY * 2;
-                    double bgX   = cellTL.X + (cellRect.Width  - bgW) / 2.0;
-                    double bgY   = cellTL.Y + (cellRect.Height - bgH) / 2.0;
+                    // Badge centered within the cell
+                    double bgW = ft.Width  + padX * 2;
+                    double bgH = ft.Height + padY * 2;
+                    double bgX = cellTL.X + (cellRect.Width  - bgW) / 2.0;
+                    double bgY = cellTL.Y + (cellRect.Height - bgH) / 2.0;
 
-                    // Gray rounded-rect background
                     dc.DrawRoundedRectangle(_valueBgBrush, null,
-                        new Rect(bgX, bgY, bgW, bgH), 2.5, 2.5);
-
+                        new Rect(bgX, bgY, bgW, bgH), 2.0, 2.0);
                     dc.DrawText(ft, new Point(bgX + padX, bgY + padY));
                 }
             }

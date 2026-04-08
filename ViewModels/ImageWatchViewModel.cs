@@ -133,6 +133,10 @@ namespace ImageWatch.ViewModels
 
             StatusText = $"找到 {names.Count} 个 Mat 变量";
 
+            // Get PID while still on UI/main thread
+            int pid = 0;
+            try { pid = dte.Debugger.CurrentProcess?.ProcessID ?? 0; } catch { }
+
             if ((_selectedVariable == null || _selectedVariable.IsStale) && Variables.Count > 0)
             {
                 foreach (var v in Variables)
@@ -141,6 +145,57 @@ namespace ImageWatch.ViewModels
             else if (_selectedVariable != null && !_selectedVariable.IsStale)
             {
                 _ = LoadVariableAsync(_selectedVariable);
+            }
+
+            // Load thumbnails for all variables that don't have one yet
+            if (pid > 0)
+                _ = LoadAllThumbnailsAsync(pid);
+        }
+
+        // Generates thumbnails for every variable that currently has none.
+        // Skips the selected variable (already handled by LoadVariableAsync).
+        // Skips images > 20 MB to avoid stalling on huge frames.
+        private const int MaxThumbnailDataSize = 20 * 1024 * 1024;
+
+        private async Task LoadAllThumbnailsAsync(int pid)
+        {
+            var items = new List<MatVariableItem>(Variables);
+            foreach (var item in items)
+            {
+                if (item == _selectedVariable) continue;   // already being loaded
+                if (item.ThumbnailImage != null) continue; // already have one
+                if (item.Info == null || item.IsStale) continue;
+                if (item.Info.DataPointer == 0 || item.Info.DataSize <= 0) continue;
+                if (item.Info.DataSize > MaxThumbnailDataSize) continue;
+
+                try
+                {
+                    var info = item.Info;
+
+                    byte[] rawData = await Task.Run(() =>
+                        DebugMemoryReader.ReadMemory(pid, info.DataPointer, info.DataSize));
+                    if (rawData == null) continue;
+
+                    BitmapSource thumb = await Task.Run(() =>
+                    {
+                        var bmp = MatBitmapConverter.Convert(rawData, info);
+                        return bmp != null ? MatBitmapConverter.CreateThumbnail(bmp) : null;
+                    });
+                    if (thumb == null) continue;
+
+                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                    // Only apply if the variable is still valid and still needs a thumbnail
+                    if (!item.IsStale && item.ThumbnailImage == null)
+                    {
+                        item.ThumbnailImage = thumb;
+                        if (item.CachedImage == null)
+                        {
+                            item.CachedImage   = await Task.Run(() => MatBitmapConverter.Convert(rawData, info));
+                            item.CachedRawData = rawData;
+                        }
+                    }
+                }
+                catch { /* ignore per-variable errors */ }
             }
         }
 
