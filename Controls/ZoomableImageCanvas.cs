@@ -55,6 +55,21 @@ namespace ImageWatch.Controls
 
         private static readonly Typeface _typeface = new Typeface("Segoe UI");
 
+        // Pre-built pen for pixel grid (rebuilt only when scale changes significantly)
+        private static readonly DashStyle _dashStyle;
+        private static readonly Pen _gridPen;
+
+        static ZoomableImageCanvas()
+        {
+            _dashStyle = new DashStyle(new double[] { 4, 4 }, 0);
+            _dashStyle.Freeze();
+
+            var gridBrush = new SolidColorBrush(Color.FromArgb(160, 190, 190, 190));
+            gridBrush.Freeze();
+            _gridPen = new Pen(gridBrush, 1.0) { DashStyle = _dashStyle };
+            _gridPen.Freeze();
+        }
+
         // ── Constructor ───────────────────────────────────────────────────────
 
         public ZoomableImageCanvas()
@@ -68,7 +83,6 @@ namespace ImageWatch.Controls
 
         private static void OnImageSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            // Reset view when a new image is loaded
             var canvas = (ZoomableImageCanvas)d;
             canvas._transform = Matrix.Identity;
             canvas.FitImageToView();
@@ -104,32 +118,29 @@ namespace ImageWatch.Controls
 
         protected override void OnRender(DrawingContext dc)
         {
-            // Background
             dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(45, 45, 48)), null,
                 new Rect(RenderSize));
 
             var img = ImageSource;
             if (img == null) return;
 
-            // Draw image with transform
             var mt = new MatrixTransform(_transform);
             dc.PushTransform(mt);
             dc.DrawImage(img, new Rect(0, 0, img.Width, img.Height));
             dc.Pop();
 
-            // Pixel value overlay when sufficiently zoomed
             double scale = _transform.M11;
-            if (scale >= 16.0)
-                DrawPixelOverlay(dc, scale, img);
+            if (scale >= 8.0)
+                DrawPixelOverlay(dc, scale);
         }
 
-        private void DrawPixelOverlay(DrawingContext dc, double scale, BitmapSource img)
+        private void DrawPixelOverlay(DrawingContext dc, double scale)
         {
             var rawData = RawData;
             var info    = MatInfo;
             if (rawData == null || info == null) return;
 
-            // Compute visible pixel range by inverting the transform
+            // Compute visible pixel range from the inverse transform
             var inv = _transform;
             inv.Invert();
             var tl = inv.Transform(new Point(0, 0));
@@ -140,50 +151,58 @@ namespace ImageWatch.Controls
             int c1 = Math.Min(info.Cols - 1, (int)Math.Ceiling(br.X));
             int r1 = Math.Min(info.Rows - 1, (int)Math.Ceiling(br.Y));
 
+            bool showText  = scale >= 16.0;
             double fontSize = Math.Max(7.0, Math.Min(scale * 0.28, 13.0));
 
             for (int row = r0; row <= r1; row++)
             {
                 for (int col = c0; col <= c1; col++)
                 {
-                    string[] vals = PixelValueFormatter.GetPixelValues(rawData, info, row, col);
-                    if (vals == null) continue;
+                    // Pixel cell rectangle in screen space
+                    var cellTL   = _transform.Transform(new Point(col,     row));
+                    var cellBR   = _transform.Transform(new Point(col + 1, row + 1));
+                    var cellRect = new Rect(cellTL, cellBR);
 
-                    byte lum      = PixelValueFormatter.GetLuminance(rawData, info, row, col);
-                    var textBrush = lum > 120 ? Brushes.Black : Brushes.White;
-                    string text   = string.Join("\n", vals);
+                    // Dashed border around each pixel
+                    dc.DrawRectangle(null, _gridPen, cellRect);
 
-                    var ft = new FormattedText(
-                        text, CultureInfo.InvariantCulture,
-                        FlowDirection.LeftToRight,
-                        _typeface, fontSize, textBrush, 1.0);
+                    // Pixel value text
+                    if (showText)
+                    {
+                        string[] vals = PixelValueFormatter.GetPixelValues(rawData, info, row, col);
+                        if (vals == null) continue;
 
-                    // Top-left of this pixel cell in screen space
-                    var cellOrigin = _transform.Transform(new Point(col, row));
-                    var pos = new Point(
-                        cellOrigin.X + (scale - ft.Width)  / 2.0,
-                        cellOrigin.Y + (scale - ft.Height) / 2.0);
+                        byte lum      = PixelValueFormatter.GetLuminance(rawData, info, row, col);
+                        var textBrush = lum > 120 ? Brushes.Black : Brushes.White;
 
-                    dc.DrawText(ft, pos);
+                        var ft = new FormattedText(
+                            string.Join("\n", vals),
+                            CultureInfo.InvariantCulture,
+                            FlowDirection.LeftToRight,
+                            _typeface, fontSize, textBrush, 1.0);
+
+                        dc.DrawText(ft, new Point(
+                            cellTL.X + (cellRect.Width  - ft.Width)  / 2.0,
+                            cellTL.Y + (cellRect.Height - ft.Height) / 2.0));
+                    }
                 }
             }
         }
 
         // ── Mouse interaction ─────────────────────────────────────────────────
 
-        protected override void OnMouseWheel(MouseWheelEventArgs e)
-        {
-            double factor = e.Delta > 0 ? 1.2 : 1.0 / 1.2;
-            var mouse = e.GetPosition(this);
-            _transform.ScaleAtPrepend(factor, factor, mouse.X, mouse.Y);
-            InvalidateVisual();
-            e.Handled = true;
-        }
-
         protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
         {
-            _isPanning  = true;
-            _lastPan    = e.GetPosition(this);
+            // Double-click: fit image to window
+            if (e.ClickCount == 2)
+            {
+                FitImageToView();
+                e.Handled = true;
+                return;
+            }
+
+            _isPanning = true;
+            _lastPan   = e.GetPosition(this);
             CaptureMouse();
             e.Handled = true;
         }
@@ -191,7 +210,7 @@ namespace ImageWatch.Controls
         protected override void OnMouseMove(MouseEventArgs e)
         {
             if (!_isPanning) return;
-            var pos  = e.GetPosition(this);
+            var pos   = e.GetPosition(this);
             var delta = pos - _lastPan;
             _transform.Translate(delta.X, delta.Y);
             _lastPan = pos;
@@ -204,7 +223,28 @@ namespace ImageWatch.Controls
             ReleaseMouseCapture();
         }
 
-        // ── Hit testing (enable mouse events on whole element) ─────────────────
+        protected override void OnMouseWheel(MouseWheelEventArgs e)
+        {
+            double factor = e.Delta > 0 ? 1.2 : 1.0 / 1.2;
+            var mouse = e.GetPosition(this);
+
+            // Convert mouse position from screen space to image space
+            var inv   = _transform;
+            inv.Invert();
+            var imgPt = inv.Transform(mouse);
+
+            // Apply scale (uniform, no centering yet)
+            _transform.Scale(factor, factor);
+
+            // Correct the translation so imgPt stays under the mouse cursor
+            var newScreen = _transform.Transform(imgPt);
+            _transform.Translate(mouse.X - newScreen.X, mouse.Y - newScreen.Y);
+
+            InvalidateVisual();
+            e.Handled = true;
+        }
+
+        // ── Hit testing ───────────────────────────────────────────────────────
 
         protected override HitTestResult HitTestCore(PointHitTestParameters hitTestParameters) =>
             new PointHitTestResult(this, hitTestParameters.HitPoint);
