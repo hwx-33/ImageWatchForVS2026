@@ -201,13 +201,14 @@ namespace ImageWatch.ViewModels
 
         public void OnDebugSessionEnded()
         {
-            StatusText     = "调试会话已结束";
+            StatusText     = "等待调试会话...";
             CurrentImage   = null;
             CurrentRawData = null;
             CurrentMatInfo = null;
             CursorInfoText = "";
             ZoomLevelText  = "";
-            foreach (var v in Variables) v.IsStale = true;
+            Variables.Clear();
+            _selectedVariable = null;
         }
 
         private async Task LoadVariableAsync(MatVariableItem item)

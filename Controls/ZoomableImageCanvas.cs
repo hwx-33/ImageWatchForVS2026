@@ -79,7 +79,7 @@ namespace ImageWatch.Controls
             _gridPen = new Pen(gridBrush, 1.0) { DashStyle = _dashStyle };
             _gridPen.Freeze();
 
-            _valueBgBrush = new SolidColorBrush(Color.FromArgb(185, 50, 50, 50));
+            _valueBgBrush = new SolidColorBrush(Color.FromArgb(160, 105, 105, 105));
             _valueBgBrush.Freeze();
         }
 
