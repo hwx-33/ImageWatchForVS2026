@@ -2,10 +2,13 @@
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="arm64" />
+    <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="ImageWatch.csproj">
+  <Project Path="ImageWatch.csproj" Id="9455fcee-5da3-48b9-abf5-3c0b6f1fce6b">
+    <BuildType Solution="Debug|Any CPU" Project="Release" />
     <Platform Solution="*|arm64" Project="arm64" />
+    <Platform Solution="*|x64" Project="x64" />
     <Platform Solution="*|x86" Project="x86" />
   </Project>
 </Solution>

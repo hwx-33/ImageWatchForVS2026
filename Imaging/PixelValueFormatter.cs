@@ -31,12 +31,12 @@ namespace ImageWatch.Imaging
             return v.ToString("0.###");
         }
 
-        // Formats float64 without trailing zeros, up to 10 decimal places
+        // Formats float64 with up to 10 significant digits, no trailing zeros
         private static string FormatDouble(double v)
         {
             if (double.IsNaN(v)) return "NaN";
             if (double.IsInfinity(v)) return v > 0 ? "∞" : "-∞";
-            return v.ToString("0.##########");
+            return v.ToString("G10");
         }
 
         private static string FormatValue(byte[] data, int offset, int depth)

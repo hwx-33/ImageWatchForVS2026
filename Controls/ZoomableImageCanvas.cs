@@ -116,7 +116,7 @@ namespace ImageWatch.Controls
 
             double scaleX = ActualWidth  / img.Width;
             double scaleY = ActualHeight / img.Height;
-            double scale  = Math.Min(scaleX, scaleY);
+            double scale  = Math.Min(Math.Min(scaleX, scaleY), MaxZoom);
 
             _transform = Matrix.Identity;
             _transform.Scale(scale, scale);
@@ -199,15 +199,17 @@ namespace ImageWatch.Controls
                         FlowDirection.LeftToRight,
                         _typeface, fontSize, textBrush, 1.0);
 
-                    // Badge centered within the cell
+                    // Badge centered within the cell, clipped so text never bleeds into adjacent cells
                     double bgW = ft.Width  + padX * 2;
                     double bgH = ft.Height + padY * 2;
                     double bgX = cellTL.X + (cellRect.Width  - bgW) / 2.0;
                     double bgY = cellTL.Y + (cellRect.Height - bgH) / 2.0;
 
+                    dc.PushClip(new RectangleGeometry(cellRect));
                     dc.DrawRoundedRectangle(_valueBgBrush, null,
                         new Rect(bgX, bgY, bgW, bgH), 2.0, 2.0);
                     dc.DrawText(ft, new Point(bgX + padX, bgY + padY));
+                    dc.Pop();
                 }
             }
         }
