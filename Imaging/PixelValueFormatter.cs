@@ -23,12 +23,20 @@ namespace ImageWatch.Imaging
             return values;
         }
 
-        // Formats float without trailing zeros: -0.5 → "-0.5", 8 → "8", 0.123 → "0.123"
+        // Formats float32 without trailing zeros, up to 3 decimal places
         private static string FormatFloat(float v)
         {
             if (float.IsNaN(v)) return "NaN";
             if (float.IsInfinity(v)) return v > 0 ? "∞" : "-∞";
             return v.ToString("0.###");
+        }
+
+        // Formats float64 without trailing zeros, up to 10 decimal places
+        private static string FormatDouble(double v)
+        {
+            if (double.IsNaN(v)) return "NaN";
+            if (double.IsInfinity(v)) return v > 0 ? "∞" : "-∞";
+            return v.ToString("0.##########");
         }
 
         private static string FormatValue(byte[] data, int offset, int depth)
@@ -42,7 +50,7 @@ namespace ImageWatch.Imaging
                 case MatTypeHelper.CV_16S: return BitConverter.ToInt16(data, offset).ToString();
                 case MatTypeHelper.CV_32S: return BitConverter.ToInt32(data, offset).ToString();
                 case MatTypeHelper.CV_32F: return FormatFloat(BitConverter.ToSingle(data, offset));
-                case MatTypeHelper.CV_64F: return FormatFloat((float)BitConverter.ToDouble(data, offset));
+                case MatTypeHelper.CV_64F: return FormatDouble(BitConverter.ToDouble(data, offset));
                 default: return "?";
             }
         }
